@@ -1,8 +1,61 @@
 {
   "name": "xiaozhi-mcp-bridge",
   "version": "1.0.0",
-  "private": true,
-  "description": "小智 AI MCP 桥接：本地文件/网页/天气/系统命令/DeepSeek Harness",
+  "description": "小智 AI MCP 桥接 - 让小智调用本机文件/搜索/天气/系统命令/代码执行，含Web管理面板 | Xiaozhi AI MCP Bridge with Web dashboard",
+  "main": "server.js",
+  "bin": {
+    "xiaozhi-mcp": "bin/cli.js",
+    "xiaozhi-mcp-bridge": "bin/cli.js"
+  },
+  "scripts": {
+    "start": "node bin/cli.js",
+    "server": "node server.js",
+    "bridge": "node guardian.js"
+  },
+  "keywords": [
+    "xiaozhi",
+    "小智AI",
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "ai-agent",
+    "websocket",
+    "bridge",
+    "automation",
+    "web-scraping",
+    "code-execution"
+  ],
+  "author": "ZnFr60",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZnFr60/xiaozhi-mcp-bridge.git"
+  },
+  "homepage": "https://github.com/ZnFr60/xiaozhi-mcp-bridge#readme",
+  "bugs": {
+    "url": "https://github.com/ZnFr60/xiaozhi-mcp-bridge/issues"
+  },
+  "files": [
+    "bin/",
+    "public/",
+    "guardian.js",
+    "server.js",
+    "web-tools.js",
+    "weather-server.js",
+    "system-tools.js",
+    "dev-tools.js",
+    "code-tools.js",
+    "mcp.json",
+    "config.example.js",
+    "start.sh",
+    "start-windows.bat",
+    "start-windows-silent.vbs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "@modelcontextprotocol/server-filesystem": "2026.8.31",
     "express": "^5.2.1",
