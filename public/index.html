@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小智 MCP 管理面板</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif; background: #0d1117; color: #c9d1d9; min-height: 100vh; }
+  .header { background: #161b22; border-bottom: 1px solid #30363d; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 18px; color: #58a6ff; }
+  .header .status { font-size: 13px; color: #8b949e; }
+  .header .status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #3fb950; margin-right: 6px; }
+  .tabs { display: flex; gap: 0; background: #161b22; border-bottom: 1px solid #30363d; padding: 0 24px; }
+  .tab { padding: 12px 20px; cursor: pointer; color: #8b949e; font-size: 14px; border-bottom: 2px solid transparent; transition: all .2s; }
+  .tab:hover { color: #c9d1d9; }
+  .tab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
+  .content { padding: 24px; max-width: 1200px; margin: 0 auto; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; color: #58a6ff; margin-bottom: 12px; }
+  input, textarea, select { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-family: inherit; width: 100%; }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: #58a6ff; }
+  textarea { resize: vertical; min-height: 80px; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; }
+  button { background: #238636; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: background .2s; }
+  button:hover { background: #2ea043; }
+  button.secondary { background: #21262d; border: 1px solid #30363d; }
+  button.secondary:hover { background: #30363d; }
+  button.danger { background: #da3633; }
+  button.danger:hover { background: #f85149; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .form-row { display: flex; gap: 12px; margin-bottom: 12px; }
+  .form-row > * { flex: 1; }
+  .form-row > button { flex: 0 0 auto; }
+  .endpoint-list { display: flex; flex-direction: column; gap: 12px; }
+  .endpoint-item { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+  .endpoint-item .ep-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .endpoint-item .ep-name { font-size: 15px; font-weight: 600; color: #c9d1d9; }
+  .endpoint-item .ep-wss { font-size: 12px; color: #8b949e; word-break: break-all; margin-bottom: 10px; font-family: 'Consolas', monospace; }
+  .endpoint-item .ep-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge.running { background: rgba(63,185,80,.15); color: #3fb950; }
+  .badge.stopped { background: rgba(139,148,158,.15); color: #8b949e; }
+  .badge.testing { background: rgba(88,166,255,.15); color: #58a6ff; }
+  .log-box { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px; margin-top: 12px; max-height: 300px; overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 11px; line-height: 1.5; display: none; }
+  .log-box.show { display: block; }
+  .log-box .log-line { white-space: pre-wrap; word-break: break-all; }
+  .log-box .log-stdout { color: #c9d1d9; }
+  .log-box .log-stderr { color: #f0883e; }
+  .log-box .log-system { color: #8b949e; font-style: italic; }
+  .tool-tester { display: grid; grid-template-columns: 250px 1fr; gap: 20px; }
+  .tool-list { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 8px; max-height: 500px; overflow-y: auto; }
+  .tool-item { padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: background .15s; }
+  .tool-item:hover { background: #21262d; }
+  .tool-item.active { background: #1f6feb33; color: #58a6ff; }
+  .tool-item .tool-name { font-weight: 600; }
+  .tool-item .tool-desc { font-size: 11px; color: #8b949e; margin-top: 2px; }
+  .tool-detail h3 { font-size: 14px; color: #58a6ff; margin-bottom: 8px; }
+  .tool-detail .tool-desc-full { font-size: 13px; color: #8b949e; margin-bottom: 16px; }
+  .arg-field { margin-bottom: 10px; }
+  .arg-field label { display: block; font-size: 12px; color: #8b949e; margin-bottom: 4px; }
+  .arg-field label .req { color: #f85149; }
+  .result-box { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 16px; margin-top: 16px; white-space: pre-wrap; word-break: break-all; font-family: 'Consolas', monospace; font-size: 12px; max-height: 400px; overflow-y: auto; display: none; }
+  .result-box.show { display: block; }
+  .empty { text-align: center; color: #8b949e; padding: 40px; font-size: 14px; }
+  .toast { position: fixed; top: 20px; right: 20px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px 20px; font-size: 13px; z-index: 1000; animation: slideIn .3s; }
+  .toast.success { border-color: #3fb950; color: #3fb950; }
+  .toast.error { border-color: #f85149; color: #f85149; }
+  @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  .server-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .server-tab { padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; background: #21262d; border: 1px solid #30363d; color: #8b949e; }
+  .server-tab.active { background: #1f6feb33; color: #58a6ff; border-color: #58a6ff; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>小智 MCP 管理面板</h1>
+  <div class="status"><span class="dot"></span><span id="statusText">运行中</span></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="endpoints">接入点管理</div>
+  <div class="tab" data-tab="tools">工具测试</div>
+  <div class="tab" data-tab="about">关于</div>
+</div>
+
+<div class="content">
+  <!-- 接入点管理 -->
+  <div class="panel active" id="panel-endpoints">
+    <div class="card">
+      <h2>添加接入点</h2>
+      <div class="form-row">
+        <input id="newName" placeholder="名称（如：小智-主力号）">
+        <input id="newWss" placeholder="WSS 地址（wss://api.xiaozhi.me/mcp/?token=...）">
+        <button onclick="addEndpoint()">添加</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>接入点列表</h2>
+      <div id="endpointList" class="endpoint-list"></div>
+    </div>
+  </div>
+
+  <!-- 工具测试 -->
+  <div class="panel" id="panel-tools">
+    <div class="card">
+      <h2>本地工具测试</h2>
+      <div class="server-tabs" id="serverTabs"></div>
+      <div class="tool-tester">
+        <div class="tool-list" id="toolList"><div class="empty">选择上方服务器</div></div>
+        <div class="tool-detail" id="toolDetail"><div class="empty">选择一个工具进行测试</div></div>
+      </div>
+      <div class="result-box" id="resultBox"></div>
+    </div>
+  </div>
+
+  <!-- 关于 -->
+  <div class="panel" id="panel-about">
+    <div class="card">
+      <h2>关于</h2>
+      <p style="font-size:14px;line-height:1.8;color:#8b949e;">
+        小智 MCP 管理面板 v2.0<br>
+        支持多接入点管理、连接测试、本地工具测试、实时日志。<br><br>
+        <strong>工具集：</strong><br>
+        · filesystem — 文件读写（/home/user）<br>
+        · web — 必应搜索 + 网页抓取<br>
+        · weather — 绵阳实时天气（Open-Meteo）<br>
+        · system — 系统状态/时间/记事本/执行命令/DeepSeek Harness/密码生成/二维码/单位换算<br>
+        · dev — JSON/Base64/URL/时间戳/UUID/Hash/正则/DNS/HTTP/端口检测<br><br>
+        <strong>守护机制：</strong>异常兜底、退避重启、刷屏自愈、2小时定期重启
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let currentServer = null;
+let currentTool = null;
+let serverTools = {};
+
+// Tab 切换
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+  };
+});
+
+// Toast
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+// ===== 接入点管理 =====
+async function loadEndpoints() {
+  const res = await fetch(API + '/api/endpoints');
+  const eps = await res.json();
+  const list = document.getElementById('endpointList');
+  if (!eps.length) { list.innerHTML = '<div class="empty">暂无接入点，上方添加</div>'; return; }
+  list.innerHTML = eps.map(ep => `
+    <div class="endpoint-item">
+      <div class="ep-header">
+        <span class="ep-name">${ep.name} <span class="badge ${ep.running ? 'running' : 'stopped'}">${ep.running ? '运行中 PID:' + ep.pid : '已停止'}</span></span>
+        <button class="danger" onclick="deleteEndpoint('${ep.id}')">删除</button>
+      </div>
+      <div class="ep-wss">${ep.wss}</div>
+      <div class="ep-actions">
+        <button onclick="startEndpoint('${ep.id}')" ${ep.running ? 'disabled' : ''}>启动桥接</button>
+        <button class="secondary" onclick="stopEndpoint('${ep.id}')" ${!ep.running ? 'disabled' : ''}>停止</button>
+        <button class="secondary" onclick="testEndpoint('${ep.id}')">测试连接</button>
+        <button class="secondary" onclick="toggleLogs('${ep.id}')">查看日志</button>
+      </div>
+      <div class="log-box" id="logs-${ep.id}"></div>
+    </div>
+  `).join('');
+}
+
+async function addEndpoint() {
+  const name = document.getElementById('newName').value.trim();
+  const wss = document.getElementById('newWss').value.trim();
+  if (!name || !wss) { toast('请填写名称和 WSS 地址', 'error'); return; }
+  const res = await fetch(API + '/api/endpoints', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, wss })
+  });
+  if (res.ok) { toast('添加成功'); document.getElementById('newName').value = ''; document.getElementById('newWss').value = ''; loadEndpoints(); }
+  else toast('添加失败', 'error');
+}
+
+async function deleteEndpoint(id) {
+  if (!confirm('确认删除该接入点？')) return;
+  await fetch(API + '/api/endpoints/' + id, { method: 'DELETE' });
+  toast('已删除'); loadEndpoints();
+}
+
+async function startEndpoint(id) {
+  const res = await fetch(API + '/api/endpoints/' + id + '/start', { method: 'POST' });
+  const data = await res.json();
+  toast(data.ok ? '已启动' : data.error || '启动失败', data.ok ? 'success' : 'error');
+  loadEndpoints();
+}
+
+async function stopEndpoint(id) {
+  await fetch(API + '/api/endpoints/' + id + '/stop', { method: 'POST' });
+  toast('已停止'); loadEndpoints();
+}
+
+async function testEndpoint(id) {
+  toast('正在测试连接...');
+  const res = await fetch(API + '/api/endpoints/' + id + '/test', { method: 'POST' });
+  const data = await res.json();
+  toast(data.message, data.connected ? 'success' : 'error');
+  if (data.output) {
+    const box = document.getElementById('logs-' + id);
+    box.classList.add('show');
+    box.innerHTML = '<div class="log-line log-system">=== 连接测试输出 ===</div><div class="log-line log-stdout">' + escapeHtml(data.output) + '</div>';
+  }
+}
+
+async function toggleLogs(id) {
+  const box = document.getElementById('logs-' + id);
+  if (box.classList.contains('show')) { box.classList.remove('show'); return; }
+  box.classList.add('show');
+  box.innerHTML = '<div class="log-line log-system">加载中...</div>';
+  const res = await fetch(API + '/api/endpoints/' + id + '/logs');
+  const data = await res.json();
+  if (!data.running) { box.innerHTML = '<div class="log-line log-system">桥接未运行</div>'; return; }
+  box.innerHTML = data.logs.map(l => `<div class="log-line log-${l.stream}">${formatTime(l.t)} ${escapeHtml(l.text)}</div>`).join('');
+}
+
+function escapeHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function formatTime(t) { return new Date(t).toLocaleTimeString('zh-CN'); }
+
+// ===== 工具测试 =====
+async function loadServers() {
+  const res = await fetch(API + '/api/local-servers');
+  const servers = await res.json();
+  const tabs = document.getElementById('serverTabs');
+  tabs.innerHTML = servers.map(s => `<div class="server-tab" data-id="${s.id}">${s.label}</div>`).join('');
+  tabs.querySelectorAll('.server-tab').forEach(tab => {
+    tab.onclick = () => selectServer(tab.dataset.id);
+  });
+}
+
+async function selectServer(serverId) {
+  currentServer = serverId;
+  currentTool = null;
+  document.querySelectorAll('.server-tab').forEach(t => t.classList.toggle('active', t.dataset.id === serverId));
+  document.getElementById('toolDetail').innerHTML = '<div class="empty">加载中...</div>';
+  const res = await fetch(API + '/api/local-servers/' + serverId + '/tools');
+  const data = await res.json();
+  serverTools[serverId] = data.tools || [];
+  const list = document.getElementById('toolList');
+  if (!data.tools || !data.tools.length) { list.innerHTML = '<div class="empty">无工具</div>'; return; }
+  list.innerHTML = data.tools.map(t => `
+    <div class="tool-item" onclick="selectTool('${t.name}')">
+      <div class="tool-name">${t.name}</div>
+      <div class="tool-desc">${(t.description || '').slice(0, 50)}</div>
+    </div>
+  `).join('');
+  document.getElementById('toolDetail').innerHTML = '<div class="empty">选择一个工具</div>';
+}
+
+function selectTool(toolName) {
+  currentTool = toolName;
+  document.querySelectorAll('.tool-item').forEach(el => el.classList.toggle('active', el.querySelector('.tool-name').textContent === toolName));
+  const tool = serverTools[currentServer].find(t => t.name === toolName);
+  const props = (tool.inputSchema && tool.inputSchema.properties) || {};
+  const required = (tool.inputSchema && tool.inputSchema.required) || [];
+  let html = `<h3>${tool.name}</h3><div class="tool-desc-full">${tool.description || ''}</div>`;
+  for (const [key, prop] of Object.entries(props)) {
+    const isReq = required.includes(key);
+    html += `<div class="arg-field"><label>${key} ${isReq ? '<span class="req">*</span>' : ''} <span style="color:#6e7681">(${prop.type})</span></label>`;
+    if (prop.type === 'object') html += `<textarea id="arg-${key}" placeholder='{"key":"value"}'></textarea>`;
+    else html += `<input id="arg-${key}" placeholder="${prop.description || ''}">`;
+    html += '</div>';
+  }
+  html += `<button onclick="callTool()">调用工具</button>`;
+  document.getElementById('toolDetail').innerHTML = html;
+}
+
+async function callTool() {
+  const tool = serverTools[currentServer].find(t => t.name === currentTool);
+  const props = (tool.inputSchema && tool.inputSchema.properties) || {};
+  const args = {};
+  for (const key of Object.keys(props)) {
+    const el = document.getElementById('arg-' + key);
+    if (el && el.value) {
+      if (props[key].type === 'object') { try { args[key] = JSON.parse(el.value); } catch { args[key] = el.value; } }
+      else if (props[key].type === 'number') args[key] = Number(el.value);
+      else if (props[key].type === 'boolean') args[key] = el.value === 'true';
+      else args[key] = el.value;
+    }
+  }
+  document.getElementById('resultBox').classList.add('show');
+  document.getElementById('resultBox').textContent = '调用中...';
+  const res = await fetch(API + '/api/local-servers/' + currentServer + '/call', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tool: currentTool, args })
+  });
+  const data = await res.json();
+  document.getElementById('resultBox').textContent = data.result || data.error || JSON.stringify(data, null, 2);
+}
+
+// 初始化
+loadEndpoints();
+loadServers();
+setInterval(loadEndpoints, 10000);
+</script>
+</body>
+</html>

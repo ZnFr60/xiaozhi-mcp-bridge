@@ -1,0 +1,9 @@
+node_modules/
+*.log
+mcp.log
+server.log
+.env
+config.js
+endpoints.json
+*.pid
+.DS_Store
