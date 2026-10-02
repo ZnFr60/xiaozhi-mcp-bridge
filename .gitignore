@@ -8,3 +8,4 @@ endpoints.json
 *.pid
 .DS_Store
 messages/
+mcp.json

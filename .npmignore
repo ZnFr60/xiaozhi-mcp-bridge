@@ -13,3 +13,5 @@ endpoints.json
 test-client.js
 install-linux.sh
 install-windows.bat
+mcp.json
+messages/

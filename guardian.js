@@ -15,9 +15,9 @@ const os = require('os');
 const NODE = process.execPath;
 const APP_DIR = __dirname;
 const BRIDGE = path.join(APP_DIR, 'node_modules', 'mcp_exe', 'bin', 'cli.js');
-const TEMPLATE = path.join(APP_DIR, 'mcp.template.json');
 const CONFIG = path.join(APP_DIR, 'mcp.json');
 const LOGFILE = path.join(APP_DIR, 'mcp.log');
+const { generateMcpConfig } = require('./lib/mcp-config.js');
 
 // ---------- 配置读取 ----------
 let WS = '';
@@ -36,21 +36,9 @@ if (!WS) {
   process.exit(1);
 }
 
-// ---------- 动态生成 mcp.json ----------
-function generateMcpConfig() {
-  if (!fs.existsSync(TEMPLATE)) {
-    throw new Error('mcp.template.json 不存在，请重新安装');
-  }
-  let tpl = fs.readFileSync(TEMPLATE, 'utf8');
-  const filesystemServer = path.join(APP_DIR, 'node_modules', '@modelcontextprotocol', 'server-filesystem', 'dist', 'index.js');
-  tpl = tpl.replace(/\{\{APP_DIR\}\}/g, APP_DIR);
-  tpl = tpl.replace(/\{\{FILESYSTEM_SERVER\}\}/g, filesystemServer);
-  tpl = tpl.replace(/\{\{FILESYSTEM_ROOT\}\}/g, FILESYSTEM_ROOT);
-  fs.writeFileSync(CONFIG, tpl, 'utf8');
-}
-
+// ---------- 动态生成 mcp.json（从模板） ----------
 try {
-  generateMcpConfig();
+  generateMcpConfig(APP_DIR);
 } catch (e) {
   console.error('生成 mcp.json 失败: ' + e.message);
   process.exit(1);

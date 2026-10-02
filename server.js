@@ -20,6 +20,9 @@ const MCP_EXE = path.join(APP_DIR, 'node_modules', 'mcp_exe', 'bin', 'cli.js');
 const PUBLIC_DIR = path.join(APP_DIR, 'public');
 const PORT = process.env.PORT || 37246;
 
+// 启动时从模板动态生成 mcp.json（确保路径正确）
+try { require('./lib/mcp-config.js').generateMcpConfig(APP_DIR); } catch (e) { console.error('[WARN] 生成 mcp.json 失败:', e.message); }
+
 // ---------- 数据持久化 ----------
 function loadEndpoints() {
   try { return JSON.parse(fs.readFileSync(ENDPOINTS_FILE, 'utf8')); }
