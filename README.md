@@ -82,6 +82,27 @@ chmod +x start.sh
 
 启动后访问 **http://localhost:37246** 打开管理面板。
 
+### 命令行配置
+
+除了 Web 面板，也可用命令行管理接入点：
+
+```bash
+# 查看配置状态
+node config-cli.js status
+
+# 添加接入点（添加第2个后消息交换机自动启用）
+node config-cli.js add "我的小智" "wss://api.xiaozhi.me/mcp/?token=xxx"
+
+# 列出所有接入点
+node config-cli.js list
+
+# 删除接入点
+node config-cli.js remove <接入点ID>
+
+# 设置默认接入点 token（写入 config.js）
+node config-cli.js token "wss://api.xiaozhi.me/mcp/?token=xxx"
+```
+
 ### 工具列表
 
 | 服务器 | 工具数 | 说明 |
@@ -201,6 +222,27 @@ chmod +x start.sh
 
 Then open **http://localhost:37246** for the dashboard.
 
+### CLI Configuration
+
+Manage endpoints from the command line (in addition to the Web dashboard):
+
+```bash
+# View config status
+node config-cli.js status
+
+# Add endpoint (message exchange auto-enables with >=2 endpoints)
+node config-cli.js add "My Xiaozhi" "wss://api.xiaozhi.me/mcp/?token=xxx"
+
+# List all endpoints
+node config-cli.js list
+
+# Remove endpoint
+node config-cli.js remove <endpoint-id>
+
+# Set default endpoint token (writes to config.js)
+node config-cli.js token "wss://api.xiaozhi.me/mcp/?token=xxx"
+```
+
 ### Tool List
 
 | Server | Count | Description |
@@ -266,6 +308,7 @@ Xiaozhi can also call the `run_self_test` tool directly.
 | `message-tools.backup.js` | 消息工具备份 / Message tools backup |
 | `test-harness.js` | 工具自检平台 / Self-test harness |
 | `test-client.js` | MCP stdio 测试客户端 / MCP stdio test client |
+| `config-cli.js` | 命令行配置工具 / CLI config tool |
 | `start.sh` | Linux 启动脚本 / Linux launcher |
 | `start-windows.bat` | Windows 启动脚本（自动提权）/ Windows launcher |
 | `start-windows-silent.vbs` | Windows 静默启动（零窗口）/ Windows silent launcher |
