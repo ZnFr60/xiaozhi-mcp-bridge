@@ -50,12 +50,24 @@ Web 管理面板 (http://localhost:37246)
 
 ### 快速开始
 
+**一键部署（推荐）/ One-Click Deploy：**
+
 ```bash
-# 1. 安装依赖
+# Linux
+curl -fsSL https://raw.githubusercontent.com/ZnFr60/xiaozhi-mcp-bridge/main/install-linux.sh | bash
+
+# Windows — 下载 install-windows.bat 双击运行
+# https://raw.githubusercontent.com/ZnFr60/xiaozhi-mcp-bridge/main/install-windows.bat
+```
+
+**手动部署 / Manual：**
+
+```bash
+# 1. 安装依赖 / Install dependencies
 cd xiaozhi-mcp-bridge
 npm install
 
-# 2. 配置小智接入点
+# 2. 配置小智接入点 / Configure endpoint
 cp config.example.js config.js
 # 编辑 config.js，填入你的小智 WSS token
 
@@ -157,6 +169,18 @@ Web Dashboard (http://localhost:37246)
 
 ### Quick Start
 
+**One-Click Deploy (recommended):**
+
+```bash
+# Linux
+curl -fsSL https://raw.githubusercontent.com/ZnFr60/xiaozhi-mcp-bridge/main/install-linux.sh | bash
+
+# Windows — download install-windows.bat and double-click
+# https://raw.githubusercontent.com/ZnFr60/xiaozhi-mcp-bridge/main/install-windows.bat
+```
+
+**Manual:**
+
 ```bash
 # 1. Install dependencies
 cd xiaozhi-mcp-bridge
@@ -245,6 +269,8 @@ Xiaozhi can also call the `run_self_test` tool directly.
 | `start.sh` | Linux 启动脚本 / Linux launcher |
 | `start-windows.bat` | Windows 启动脚本（自动提权）/ Windows launcher |
 | `start-windows-silent.vbs` | Windows 静默启动（零窗口）/ Windows silent launcher |
+| `install-linux.sh` | Linux 一键部署脚本 / Linux one-click deploy (GitHub only) |
+| `install-windows.bat` | Windows 一键部署脚本 / Windows one-click deploy (GitHub only) |
 
 ## License
 

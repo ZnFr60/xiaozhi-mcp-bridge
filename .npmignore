@@ -11,3 +11,5 @@ endpoints.json
 .gitignore
 .npmignore
 test-client.js
+install-linux.sh
+install-windows.bat
