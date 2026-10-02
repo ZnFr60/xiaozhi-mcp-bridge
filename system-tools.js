@@ -1,12 +1,18 @@
 #!/usr/bin/env node
 /**
- * 实用工具 MCP 服务器（stdio）— Linux 版
- * 包含：系统状态、当前时间、本地记事本、执行命令、DeepSeek Harness (dsh)
+ * 实用工具 MCP 服务器（stdio）— 跨平台版
+ * Windows: PowerShell | Linux/macOS: bash
+ * 包含：系统状态、当前时间、本地记事本、执行命令、DeepSeek Harness (dsh)、密码/二维码/单位换算
  */
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
-const { execSync, exec, spawn } = require('child_process');
+const crypto = require('crypto');
+const { execSync, spawn } = require('child_process');
+
+const IS_WINDOWS = process.platform === 'win32';
+const SHELL = IS_WINDOWS ? 'powershell.exe' : '/bin/bash';
+const SHELL_NAME = IS_WINDOWS ? 'PowerShell' : 'Bash';
 
 const NOTES_FILE = path.join(__dirname, 'notes.json');
 
@@ -26,8 +32,13 @@ function fmtGB(b) { return (b / 1073741824).toFixed(1) + ' GB'; }
 
 function diskInfo() {
   try {
-    const out = execSync('df -h --output=source,size,used,avail,pcent,target 2>/dev/null | grep -v tmpfs | grep -v overlay', { encoding: 'utf8' });
-    return out.trim();
+    if (IS_WINDOWS) {
+      const out = execSync('powershell -NoProfile -Command "Get-PSDrive -PSProvider FileSystem | Select-Object Name,@{N=\'Used(GB)\';E={[math]::Round($_.Used/1GB,1)}},@{N=\'Free(GB)\';E={[math]::Round($_.Free/1GB,1)}} | Format-Table -AutoSize"', { encoding: 'utf8' });
+      return out.trim();
+    } else {
+      const out = execSync('df -h --output=source,size,used,avail,pcent,target 2>/dev/null | grep -v tmpfs | grep -v overlay', { encoding: 'utf8' });
+      return out.trim();
+    }
   } catch (e) {
     return '  (磁盘信息获取失败: ' + e.message + ')';
   }
@@ -41,6 +52,7 @@ function systemStatus() {
   return [
     `主机: ${os.hostname()}`,
     `系统: ${os.type()} ${os.release()} (${os.arch})`,
+    `命令行: ${SHELL_NAME}`,
     `CPU: ${cpus[0] ? cpus[0].model : '未知'}  (${cpus.length} 核)  1分钟负载: ${load1.toFixed(2)}`,
     `内存: 已用 ${usedPct}%  (${fmtGB(totalMem - freeMem)} / ${fmtGB(totalMem)})`,
     `运行: ${fmtUptime(os.uptime())}`,
@@ -56,16 +68,32 @@ function nowInfo() {
     `(时区 ${Intl.DateTimeFormat().resolvedOptions().timeZone})`;
 }
 
+/**
+ * 跨平台执行命令：Windows 用 PowerShell，Linux/macOS 用 bash
+ */
 async function runCommand(command, timeoutSec) {
   return new Promise((resolve) => {
     const t = Number.isFinite(timeoutSec) ? Math.min(timeoutSec, 120) * 1000 : 30000;
-    exec(command, { timeout: t, encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, shell: '/bin/bash' }, (err, stdout, stderr) => {
+    const shellArgs = IS_WINDOWS
+      ? ['-NoProfile', '-NonInteractive', '-Command', String(command)]
+      : ['-c', String(command)];
+    const child = spawn(SHELL, shellArgs, {
+      env: { ...process.env },
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    const killer = setTimeout(() => { try { child.kill(IS_WINDOWS ? 'SIGTERM' : 'SIGKILL'); } catch {} }, t);
+    let stdout = '', stderr = '';
+    child.stdout.on('data', (d) => { stdout += d.toString(); if (stdout.length > 2 * 1024 * 1024) stdout = stdout.slice(-1024 * 1024); });
+    child.stderr.on('data', (d) => { stderr += d.toString(); if (stderr.length > 512 * 1024) stderr = stderr.slice(-256 * 1024); });
+    child.on('error', (e) => { clearTimeout(killer); resolve('【错误】启动 ' + SHELL_NAME + ' 失败: ' + e.message); });
+    child.on('close', (code, signal) => {
+      clearTimeout(killer);
       let out = '';
-      if (stdout && stdout.trim()) out += '【输出】\n' + stdout.trim() + '\n';
-      if (stderr && stderr.trim()) out += '【错误】\n' + stderr.trim() + '\n';
+      if (stdout.trim()) out += '【输出】\n' + stdout.trim() + '\n';
+      if (stderr.trim()) out += '【错误】\n' + stderr.trim() + '\n';
       if (!out) out = '(无输出)';
-      if (err && err.killed) out += '\n[命令超时或被终止]';
-      else if (err && !err.killed) out += '\n[退出码 ' + err.code + ']';
+      if (signal) out += '\n[命令被终止: ' + signal + ']';
+      else if (code !== 0 && code !== null) out += '\n[退出码 ' + code + ']';
       resolve(out);
     });
   });
@@ -73,7 +101,8 @@ async function runCommand(command, timeoutSec) {
 
 function findDsh() {
   try {
-    const p = execSync('which dsh 2>/dev/null', { encoding: 'utf8' }).trim();
+    const cmd = IS_WINDOWS ? 'where dsh' : 'which dsh 2>/dev/null';
+    const p = execSync(cmd, { encoding: 'utf8' }).trim().split('\n')[0].trim();
     return p || null;
   } catch { return null; }
 }
@@ -85,14 +114,15 @@ async function runDsh(task, cwd, timeoutSec) {
   }
   return new Promise((resolve) => {
     const t = Number.isFinite(timeoutSec) ? Math.min(timeoutSec, 600) * 1000 : 180000;
-    const cwdSafe = cwd || process.env.HOME;
+    const cwdSafe = cwd || (IS_WINDOWS ? process.env.USERPROFILE : process.env.HOME);
     let stdout = '', stderr = '';
     let child;
     try {
       child = spawn(dshPath, ['--profile', 'headless', String(task || '')], {
         cwd: cwdSafe,
         env: { ...process.env },
-        stdio: ['ignore', 'pipe', 'pipe']
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: IS_WINDOWS  // Windows 上 dsh 可能是 .cmd，需要 shell
       });
     } catch (e) { return resolve('启动 dsh 失败: ' + e.message); }
     const killer = setTimeout(() => { try { child.kill('SIGKILL'); } catch {} }, t);
@@ -109,8 +139,6 @@ async function runDsh(task, cwd, timeoutSec) {
     });
   });
 }
-
-const crypto = require('crypto');
 
 function passwordGen(length = 16, opts = {}) {
   const nums = '0123456789';
@@ -136,13 +164,10 @@ function unitConvert(value, from, to) {
   const f = from.toLowerCase(), t = to.toLowerCase();
   const v = Number(value);
   if (isNaN(v)) return '数值无效';
-  // 长度
   const len = { m: 1, km: 1000, cm: 0.01, mm: 0.001, ft: 0.3048, inch: 0.0254, mile: 1609.344, yd: 0.9144 };
-  // 重量
   const wt = { kg: 1, g: 0.001, mg: 0.000001, lb: 0.453592, oz: 0.0283495, t: 1000 };
   if (len[f] && len[t]) return `${v}${from} = ${(v * len[f] / len[t]).toFixed(6)}${to}`;
   if (wt[f] && wt[t]) return `${v}${from} = ${(v * wt[f] / wt[t]).toFixed(6)}${to}`;
-  // 温度
   if ((f === 'c' || f === 'f' || f === 'k') && (t === 'c' || t === 'f' || t === 'k')) {
     let c;
     if (f === 'c') c = v;
@@ -160,7 +185,7 @@ function unitConvert(value, from, to) {
 const TOOLS = [
   {
     name: 'get_system_status',
-    description: '查看本机系统状态：主机名、操作系统、CPU型号与核数、内存占用、磁盘空间、运行时间。',
+    description: '查看本机系统状态：主机名、操作系统、命令行类型、CPU型号与核数、内存占用、磁盘空间、运行时间。',
     inputSchema: { type: 'object', properties: {} }
   },
   {
@@ -189,11 +214,11 @@ const TOOLS = [
   },
   {
     name: 'run_command',
-    description: '在本机执行一条 Shell 命令（bash），返回标准输出和错误输出。适合执行系统命令、查进程、调用系统工具等。',
+    description: '在本机执行命令行。Windows 自动用 PowerShell，Linux/macOS 自动用 Bash，返回标准输出和错误输出。适合执行系统命令、查进程、调用系统工具等。',
     inputSchema: {
       type: 'object',
       properties: {
-        command: { type: 'string', description: '要执行的命令行，例如 ls -la 或 ps aux' },
+        command: { type: 'string', description: '要执行的命令（Windows用PowerShell语法，Linux用bash语法），例如 ls -la 或 Get-Process' },
         timeout: { type: 'number', description: '超时秒数，默认 30，最大 120' }
       },
       required: ['command']
@@ -282,9 +307,9 @@ async function callTool(name, args) {
   }
 }
 
+// ---------- MCP stdio 协议 ----------
 const READY = '2024-11-05';
 function send(msg) { process.stdout.write(JSON.stringify(msg) + '\n'); }
-
 process.stdin.setEncoding('utf8');
 let buf = '';
 process.stdin.on('data', (chunk) => {
@@ -296,13 +321,12 @@ process.stdin.on('data', (chunk) => {
     if (line) handleLine(line);
   }
 });
-
 async function handleLine(line) {
   let msg;
   try { msg = JSON.parse(line); } catch { return; }
   const { id, method, params } = msg;
   if (method === 'initialize') {
-    send({ jsonrpc: '2.0', id, result: { protocolVersion: READY, capabilities: { tools: {} }, serverInfo: { name: 'system-tools', version: '1.0.0' } } });
+    send({ jsonrpc: '2.0', id, result: { protocolVersion: READY, capabilities: { tools: {} }, serverInfo: { name: 'system-tools', version: '2.0.0' } } });
   } else if (method === 'notifications/initialized') {
   } else if (method === 'tools/list') {
     send({ jsonrpc: '2.0', id, result: { tools: TOOLS } });

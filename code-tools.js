@@ -9,6 +9,11 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+const IS_WINDOWS = process.platform === 'win32';
+const SHELL = IS_WINDOWS ? 'powershell.exe' : '/bin/bash';
+const SHELL_NAME = IS_WINDOWS ? 'PowerShell' : 'Bash';
+const PYTHON_CMD = IS_WINDOWS ? 'python' : 'python3';
+
 const TMP_DIR = path.join(os.tmpdir(), 'xiaozhi-mcp-code');
 fs.mkdirSync(TMP_DIR, { recursive: true });
 
@@ -31,7 +36,7 @@ function runProcess(cmd, args, opts = {}) {
 async function runPython(code, timeout = 15) {
   const file = path.join(TMP_DIR, 'py_' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.py');
   fs.writeFileSync(file, code, 'utf8');
-  const result = await runProcess('python3', [file], { timeout: timeout * 1000 });
+  const result = await runProcess(PYTHON_CMD, [file], { timeout: timeout * 1000 });
   try { fs.unlinkSync(file); } catch {}
   return formatResult('Python', result);
 }
@@ -39,13 +44,13 @@ async function runPython(code, timeout = 15) {
 async function runC(code, timeout = 20) {
   const base = 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2);
   const srcFile = path.join(TMP_DIR, base + '.c');
-  const binFile = path.join(TMP_DIR, base);
+  const binFile = path.join(TMP_DIR, IS_WINDOWS ? base + '.exe' : base);
   fs.writeFileSync(srcFile, code, 'utf8');
   // 编译
   const compile = await runProcess('gcc', [srcFile, '-o', binFile, '-Wall', '-std=c11'], { timeout: 15000 });
   if (compile.code !== 0) {
     try { fs.unlinkSync(srcFile); } catch {}
-    return '【编译失败】\n' + (compile.stderr || compile.stdout || '未知错误');
+    return '【编译失败】\n' + (compile.stderr || compile.stdout || '未知错误') + '\n（Windows 需先安装 MinGW-w64 并将 gcc 加入 PATH）';
   }
   // 运行
   const result = await runProcess(binFile, [], { timeout: timeout * 1000 });
@@ -53,13 +58,31 @@ async function runC(code, timeout = 20) {
   return formatResult('C', result);
 }
 
+/**
+ * 跨平台执行命令：Windows 用 PowerShell，Linux/macOS 用 bash
+ */
 async function runBash(command, timeout = 15) {
   return new Promise((resolve) => {
-    exec(command, { timeout: timeout * 1000, maxBuffer: 10 * 1024 * 1024, shell: '/bin/bash' }, (err, stdout, stderr) => {
+    const t = timeout * 1000;
+    const shellArgs = IS_WINDOWS
+      ? ['-NoProfile', '-NonInteractive', '-Command', String(command)]
+      : ['-c', String(command)];
+    const child = spawn(SHELL, shellArgs, {
+      env: { ...process.env },
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    const killer = setTimeout(() => { try { child.kill('SIGKILL'); } catch {} }, t);
+    let stdout = '', stderr = '';
+    child.stdout.on('data', (d) => { stdout += d.toString(); if (stdout.length > 1e6) stdout = stdout.slice(-5e5); });
+    child.stderr.on('data', (d) => { stderr += d.toString(); if (stderr.length > 5e5) stderr = stderr.slice(-2.5e5); });
+    child.on('error', (e) => { clearTimeout(killer); resolve('【错误】' + SHELL_NAME + ' 启动失败: ' + e.message); });
+    child.on('close', (code, signal) => {
+      clearTimeout(killer);
       let out = '';
       if (stdout) out += stdout;
       if (stderr) out += '[stderr]\n' + stderr;
-      if (err) out += '\n[退出码 ' + err.code + ']' + (err.killed ? '（超时）' : '');
+      if (signal) out += '\n[超时被终止]';
+      else if (code !== 0 && code !== null) out += '\n[退出码 ' + code + ']';
       resolve(out || '(无输出)');
     });
   });
@@ -90,14 +113,19 @@ function formatResult(lang, result) {
 function getEnvInfo() {
   const lines = [
     '代码执行环境信息:',
-    `  运行用户: ${os.userInfo().username} (uid=${process.getuid()})`,
+    `  运行用户: ${os.userInfo().username}` + (IS_WINDOWS ? '' : ` (uid=${process.getuid()})`),
+    `  操作系统: ${os.type()} ${os.release()} (${os.arch})`,
+    `  命令行: ${SHELL_NAME}`,
     `  工作目录: ${process.cwd()}`,
     `  临时目录: ${TMP_DIR}`,
     `  Node: ${process.version}`,
   ];
-  try { lines.push('  Python: ' + require('child_process').execSync('python3 --version 2>&1').toString().trim()); } catch {}
-  try { lines.push('  GCC: ' + require('child_process').execSync('gcc --version 2>&1 | head -1').toString().trim()); } catch {}
-  lines.push(`  权限提示: 当前进程权限即为代码执行权限，sudo 启动则代码以 root 运行`);
+  try { lines.push('  Python: ' + require('child_process').execSync(PYTHON_CMD + ' --version 2>&1', IS_WINDOWS ? { shell: 'powershell.exe' } : {}).toString().trim()); } catch {}
+  try {
+    const gccVer = require('child_process').execSync('gcc --version 2>&1', IS_WINDOWS ? { shell: 'powershell.exe' } : {}).toString().split('\n')[0].trim();
+    lines.push('  GCC: ' + gccVer);
+  } catch {}
+  lines.push(`  权限提示: 当前进程权限即为代码执行权限` + (IS_WINDOWS ? '，管理员启动则全机访问' : '，sudo 启动则以 root 运行'));
   return lines.join('\n');
 }
 
@@ -128,11 +156,11 @@ const TOOLS = [
   },
   {
     name: 'run_bash',
-    description: '执行 bash 命令/脚本，返回输出。权限与当前进程一致。',
+    description: '执行命令行脚本。Windows 自动用 PowerShell，Linux/macOS 自动用 Bash，返回输出。权限与当前进程一致。',
     inputSchema: {
       type: 'object',
       properties: {
-        command: { type: 'string', description: 'bash 命令或脚本' },
+        command: { type: 'string', description: '命令或脚本（Windows用PowerShell语法，Linux用bash语法）' },
         timeout: { type: 'number', description: '超时秒数，默认 15，最大 120' }
       },
       required: ['command']
@@ -187,7 +215,7 @@ async function handleLine(line) {
   try { msg = JSON.parse(line); } catch { return; }
   const { id, method, params } = msg;
   if (method === 'initialize') {
-    send({ jsonrpc: '2.0', id, result: { protocolVersion: READY, capabilities: { tools: {} }, serverInfo: { name: 'code-tools', version: '1.0.0' } } });
+    send({ jsonrpc: '2.0', id, result: { protocolVersion: READY, capabilities: { tools: {} }, serverInfo: { name: 'code-tools', version: '2.0.0' } } });
   } else if (method === 'notifications/initialized') {
   } else if (method === 'tools/list') {
     send({ jsonrpc: '2.0', id, result: { tools: TOOLS } });
