@@ -147,7 +147,8 @@ const LOCAL_SERVERS = [
   { id: 'web', script: 'web-tools.js', label: '网页工具' },
   { id: 'weather', script: 'weather-server.js', label: '天气工具' },
   { id: 'dev', script: 'dev-tools.js', label: '开发者工具' },
-  { id: 'code', script: 'code-tools.js', label: '代码执行' }
+  { id: 'code', script: 'code-tools.js', label: '代码执行' },
+  { id: 'message', script: 'message-tools.js', label: '消息交换机' }
 ];
 
 // ---------- Express ----------

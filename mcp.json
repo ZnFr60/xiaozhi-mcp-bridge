@@ -36,6 +36,12 @@
       "args": [
         "/home/user/Doubao/chats/38441333420576002/xiaozhi-mcp/code-tools.js"
       ]
+    },
+    "message": {
+      "command": "node",
+      "args": [
+        "/home/user/Doubao/chats/38441333420576002/xiaozhi-mcp/message-tools.js"
+      ]
     }
   }
 }

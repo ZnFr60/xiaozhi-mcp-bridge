@@ -182,6 +182,45 @@ function unitConvert(value, from, to) {
   return `不支持的单位换算: ${from} -> ${to}。支持长度(m/km/cm/mm/ft/inch/mile/yd)、重量(kg/g/mg/lb/oz/t)、温度(C/F/K)`;
 }
 
+/**
+ * 运行自检：调用 test-harness.js 测试所有 MCP 工具服务器
+ */
+async function runSelfTest(filter = null) {
+  return new Promise((resolve) => {
+    const harness = path.join(__dirname, 'test-harness.js');
+    if (!fs.existsSync(harness)) { resolve('自检失败：test-harness.js 不存在'); return; }
+    const args = filter ? [harness, '--json', filter] : [harness, '--json'];
+    const child = spawn(process.execPath, args, {
+      cwd: __dirname,
+      env: { ...process.env },
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    let stdout = '', stderr = '';
+    const timer = setTimeout(() => { try { child.kill(); } catch {} }, 60000);
+    child.stdout.on('data', d => { stdout += d.toString(); });
+    child.stderr.on('data', d => { stderr += d.toString(); });
+    child.on('close', () => {
+      clearTimeout(timer);
+      try {
+        const data = JSON.parse(stdout);
+        let out = `自检完成：通过 ${data.totalPass} / 失败 ${data.totalFail}\n\n`;
+        for (const s of data.servers) {
+          if (s.error) { out += `❌ [${s.label}] ${s.error}\n`; continue; }
+          const icon = s.failed === 0 ? '✅' : '⚠️';
+          out += `${icon} [${s.label}] 工具${s.toolCount}个 测试${s.testsRun}项 通过${s.passed} 失败${s.failed} (${s.duration}ms)\n`;
+          for (const t of s.tests) {
+            if (!t.ok) out += `   ❌ ${t.tool}: ${(t.error || '').slice(0, 80)}\n`;
+          }
+        }
+        resolve(out);
+      } catch {
+        resolve('自检结果解析失败。\nstdout: ' + stdout.slice(0, 500) + '\nstderr: ' + stderr.slice(0, 500));
+      }
+    });
+    child.on('error', (e) => { clearTimeout(timer); resolve('自检启动失败: ' + e.message); });
+  });
+}
+
 const TOOLS = [
   {
     name: 'get_system_status',
@@ -275,6 +314,16 @@ const TOOLS = [
       },
       required: ['value', 'from', 'to']
     }
+  },
+  {
+    name: 'run_self_test',
+    description: '运行自检：模拟小智AI作为MCP客户端，自动测试所有工具服务器（系统/网页/天气/开发者/代码/消息），输出通过/失败报告。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filter: { type: 'string', description: '可选，只测试指定服务器（system/web/weather/dev/code/message）' }
+      }
+    }
   }
 ];
 
@@ -303,6 +352,7 @@ async function callTool(name, args) {
     }
     case 'qrcode_gen': return qrcodeGen(String(args.text || ''), Number(args.size) || 256);
     case 'unit_convert': return unitConvert(args.value, String(args.from || ''), String(args.to || ''));
+    case 'run_self_test': return await runSelfTest(args.filter ? String(args.filter) : null);
     default: throw new Error('未知工具: ' + name);
   }
 }
