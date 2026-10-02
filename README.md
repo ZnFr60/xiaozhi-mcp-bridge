@@ -141,12 +141,14 @@ node test-harness.js --json
 
 ### 关键注意事项
 
-1. **zod 版本锁定**：`package.json` 中 `overrides.zod = "3.25.76"` 不可删，否则 mcp_exe 报错
-2. **token 保密**：小智 WSS token 存储在 `config.js`，已加入 `.gitignore`，不会提交到公开仓库
-3. **搜索**：必应 + 360 双引擎聚合，百度/搜狗反爬严格无法抓取
-4. **守护机制**：刷屏自愈 + 2 小时定期重启，防止 WebSocket 长连接漂移
-5. **UI 端口**：默认 37246，可通过环境变量 `PORT` 修改
-6. **消息工具**：仅在配置 ≥2 个接入点时出现，单个接入点时自动隐藏
+1. **zod 版本锁定**：`zod@3.25.76` 同时写在 `dependencies` 和 `overrides` 中（双重保障），全局安装时也能生效，否则 mcp_exe 报 `_fieldsToZodSchema` 错误
+2. **mcp.json 动态生成**：启动时 guardian.js 从 `mcp.template.json` 自动生成 `mcp.json`，所有路径基于安装目录动态解析，无需手动修改
+3. **token 保密**：小智 WSS token 存储在 `config.js`，已加入 `.gitignore`，不会提交到公开仓库
+4. **搜索**：必应 + 360 双引擎聚合，百度/搜狗反爬严格无法抓取
+5. **守护机制**：30秒启动宽限期 + 刷屏自愈（阈值100KB/10s）+ 2小时定期重启
+6. **UI 端口**：默认 37246，可通过环境变量 `PORT` 修改
+7. **消息工具**：仅在配置 ≥2 个接入点时出现，单个接入点时自动隐藏
+8. **代理环境**：mcp_exe 的 WebSocket 默认不支持 HTTP 代理，有代理的环境需用 proxychains 等工具包装或在无代理环境运行
 
 ---
 
@@ -281,12 +283,14 @@ Xiaozhi can also call the `run_self_test` tool directly.
 
 ### Important Notes
 
-1. **zod version lock**: `overrides.zod = "3.25.76"` in `package.json` is required, otherwise mcp_exe crashes
-2. **Token security**: Xiaozhi WSS token is stored in `config.js`, which is gitignored and never committed
-3. **Search**: Bing + 360 aggregated; Baidu/Sogou have strict anti-bot protection
-4. **Guardian**: spam self-healing + 2h periodic restart to prevent WebSocket connection drift
-5. **UI port**: default 37246, configurable via `PORT` environment variable
-6. **Message tools**: only appear when ≥2 endpoints are configured; auto-hidden otherwise
+1. **zod version lock**: `zod@3.25.76` is pinned in both `dependencies` and `overrides` (double protection), works with global installs; otherwise mcp_exe crashes with `_fieldsToZodSchema`
+2. **Dynamic mcp.json**: guardian.js generates `mcp.json` from `mcp.template.json` at startup, all paths resolved relative to install dir — no manual editing needed
+3. **Token security**: Xiaozhi WSS token is stored in `config.js`, which is gitignored and never committed
+4. **Search**: Bing + 360 aggregated; Baidu/Sogou have strict anti-bot protection
+5. **Guardian**: 30s startup grace period + spam self-healing (100KB/10s threshold) + 2h periodic restart
+6. **UI port**: default 37246, configurable via `PORT` environment variable
+7. **Message tools**: only appear when ≥2 endpoints are configured; auto-hidden otherwise
+8. **Proxy environments**: mcp_exe's WebSocket does not support HTTP proxies by default; use proxychains or run in a proxy-free environment
 
 ---
 
@@ -297,7 +301,8 @@ Xiaozhi can also call the `run_self_test` tool directly.
 | `guardian.js` | 守护进程 / Guardian process |
 | `server.js` | Web 面板后端（Express，端口 37246）/ Dashboard backend |
 | `public/index.html` | Web 面板前端 / Dashboard frontend |
-| `mcp.json` | MCP 服务器配置（7个 server）/ MCP server config |
+| `mcp.json` | MCP 服务器配置（运行时自动生成）/ MCP server config (auto-generated) |
+| `mcp.template.json` | MCP 配置模板（含路径占位符）/ MCP config template with placeholders |
 | `config.example.js` | 配置模板 / Config template |
 | `web-tools.js` | 网页工具 / Web tools |
 | `weather-server.js` | 天气工具 / Weather tools |

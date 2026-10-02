@@ -9,39 +9,27 @@
     },
     "web": {
       "command": "node",
-      "args": [
-        "/home/user/Doubao/chats/38441333420576002/xiaozhi-mcp/web-tools.js"
-      ]
+      "args": ["/home/user/Doubao/chats/38441333420576002/xiaozhi-mcp/web-tools.js"]
     },
     "weather": {
       "command": "node",
-      "args": [
-        "/home/user/Doubao/chats/38441333420576002/xiaozhi-mcp/weather-server.js"
-      ]
+      "args": ["/home/user/Doubao/chats/38441333420576002/xiaozhi-mcp/weather-server.js"]
     },
     "system": {
       "command": "node",
-      "args": [
-        "/home/user/Doubao/chats/38441333420576002/xiaozhi-mcp/system-tools.js"
-      ]
+      "args": ["/home/user/Doubao/chats/38441333420576002/xiaozhi-mcp/system-tools.js"]
     },
     "dev": {
       "command": "node",
-      "args": [
-        "/home/user/Doubao/chats/38441333420576002/xiaozhi-mcp/dev-tools.js"
-      ]
+      "args": ["/home/user/Doubao/chats/38441333420576002/xiaozhi-mcp/dev-tools.js"]
     },
     "code": {
       "command": "node",
-      "args": [
-        "/home/user/Doubao/chats/38441333420576002/xiaozhi-mcp/code-tools.js"
-      ]
+      "args": ["/home/user/Doubao/chats/38441333420576002/xiaozhi-mcp/code-tools.js"]
     },
     "message": {
       "command": "node",
-      "args": [
-        "/home/user/Doubao/chats/38441333420576002/xiaozhi-mcp/message-tools.js"
-      ]
+      "args": ["/home/user/Doubao/chats/38441333420576002/xiaozhi-mcp/message-tools.js"]
     }
   }
 }

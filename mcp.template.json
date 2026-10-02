@@ -1,0 +1,35 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "node",
+      "args": [
+        "{{FILESYSTEM_SERVER}}",
+        "{{FILESYSTEM_ROOT}}"
+      ]
+    },
+    "web": {
+      "command": "node",
+      "args": ["{{APP_DIR}}/web-tools.js"]
+    },
+    "weather": {
+      "command": "node",
+      "args": ["{{APP_DIR}}/weather-server.js"]
+    },
+    "system": {
+      "command": "node",
+      "args": ["{{APP_DIR}}/system-tools.js"]
+    },
+    "dev": {
+      "command": "node",
+      "args": ["{{APP_DIR}}/dev-tools.js"]
+    },
+    "code": {
+      "command": "node",
+      "args": ["{{APP_DIR}}/code-tools.js"]
+    },
+    "message": {
+      "command": "node",
+      "args": ["{{APP_DIR}}/message-tools.js"]
+    }
+  }
+}

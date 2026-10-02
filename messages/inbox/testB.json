@@ -1,0 +1,12 @@
+{
+  "messages": [
+    {
+      "msgId": "msg_muqmkgpv_aof8e6",
+      "timestamp": "20261002151147866",
+      "from": "testA",
+      "to": "testB",
+      "content": "test message",
+      "recalled": false
+    }
+  ]
+}
