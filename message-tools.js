@@ -77,7 +77,22 @@ function doRecall(user, msgId) {
 
 function doListUsers() {
   const s = new Set();
-  [INBOX, OUTBOX, READ_DIR].forEach(d => { if (fs.existsSync(d)) fs.readdirSync(d).forEach(f => { if (f.endsWith('.json')) s.add(f.replace('.json', '')); }); });
+  // 从收件箱和发件箱的消息内容中提取原始用户名（避免文件名被sanitize丢失中文）
+  [INBOX, OUTBOX].forEach(d => {
+    if (!fs.existsSync(d)) return;
+    fs.readdirSync(d).forEach(f => {
+      if (!f.endsWith('.json')) return;
+      try {
+        const box = JSON.parse(fs.readFileSync(path.join(d, f), 'utf8'));
+        if (Array.isArray(box.messages)) {
+          box.messages.forEach(m => {
+            if (m.from) s.add(m.from);
+            if (m.to) s.add(m.to);
+          });
+        }
+      } catch {}
+    });
+  });
   return s.size ? `已注册用户（${s.size}个）:\n  ${[...s].sort().join(', ')}` : '暂无用户记录。';
 }
 
