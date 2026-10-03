@@ -73,20 +73,43 @@ function testConnection(wss) {
     });
     let output = '';
     let connected = false;
+    let authError = null;
+    const SUCCESS_PATTERNS = [
+      /成功连接/i, /connected/i, /initialize/i,
+      /tools\/list/i, /notification/i, /MCP/i
+    ];
+    const AUTH_PATTERNS = [/401/i, /403/i, /unauthorized/i, /forbidden/i, /token.*(invalid|expired)/i];
+
     const onData = (d) => {
       output += d.toString();
-      if (output.includes('成功连接到WebSocket') || output.includes('WebSocket') && output.includes('initialize')) {
-        connected = true;
+      // 检测认证错误
+      for (const p of AUTH_PATTERNS) {
+        if (p.test(output)) { authError = output.match(p)[0]; break; }
+      }
+      // 检测连接成功（多个模式命中任一即可）
+      for (const p of SUCCESS_PATTERNS) {
+        if (p.test(output)) { connected = true; break; }
       }
     };
     child.stdout.on('data', onData);
     child.stderr.on('data', onData);
+    child.on('exit', (code) => {
+      // 进程提前退出也作为判断依据
+      if (code !== 0 && !connected) {
+        // 不立即判定失败，等超时统一返回
+      }
+    });
     setTimeout(() => {
       try { child.kill('SIGKILL'); } catch {}
+      let message;
+      if (connected) message = '连接成功';
+      else if (authError) message = `认证失败 (${authError})：token 无效或已过期`;
+      else message = '连接失败或超时（8秒内未检测到握手）';
       resolve({
         connected,
+        authError: authError || null,
         output: output.slice(-3000),
-        message: connected ? '连接成功' : '连接失败或超时（8秒内未检测到握手）'
+        message
       });
     }, 8000);
   });
@@ -194,6 +217,15 @@ app.delete('/api/endpoints/:id', (req, res) => {
 app.post('/api/endpoints/:id/start', (req, res) => {
   const ep = loadEndpoints().find(e => e.id === req.params.id);
   if (!ep) return res.status(404).json({ error: '接入点不存在' });
+  // 探测 guardian 是否已在运行（避免双连接）
+  const guardian = getGuardianStatus();
+  if (guardian && guardian.running && guardian.state === 'connected') {
+    return res.json({
+      ok: false,
+      warning: '守护进程已连接此 token，再次启动可能造成双连接。如需面板管理，请先停止守护进程（运行 stop.sh）。',
+      guardian
+    });
+  }
   res.json(startBridge(ep));
 });
 
@@ -239,13 +271,36 @@ app.post('/api/local-servers/:serverId/call', async (req, res) => {
   res.json(result);
 });
 
+// 读取守护进程状态文件
+function getGuardianStatus() {
+  try {
+    const f = path.join(APP_DIR, 'guardian-status.json');
+    if (fs.existsSync(f)) {
+      const s = JSON.parse(fs.readFileSync(f, 'utf8'));
+      // 检查进程是否真的在运行
+      const pidFile = path.join(APP_DIR, 'guardian.pid');
+      let running = false;
+      if (fs.existsSync(pidFile)) {
+        const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim());
+        if (pid && !isNaN(pid)) {
+          try { process.kill(pid, 0); running = true; } catch { running = false; }
+        }
+      }
+      return { ...s, running };
+    }
+  } catch {}
+  return null;
+}
+
 // 全局状态
 app.get('/api/status', (req, res) => {
+  const guardian = getGuardianStatus();
   res.json({
     uptime: process.uptime(),
     bridges: Object.keys(bridges).length,
     endpoints: loadEndpoints().length,
-    port: PORT
+    port: PORT,
+    guardian: guardian || { state: 'not_running', running: false }
   });
 });
 

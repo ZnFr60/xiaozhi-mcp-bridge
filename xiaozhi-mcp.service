@@ -1,0 +1,33 @@
+[Unit]
+Description=Xiaozhi AI MCP Bridge (小智 AI MCP 桥接)
+Documentation=https://github.com/ZnFr60/xiaozhi-mcp-bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 请修改为实际安装路径和运行用户
+User=your_username
+WorkingDirectory=/home/your_username/xiaozhi-mcp-bridge
+ExecStart=/usr/bin/node /home/your_username/xiaozhi-mcp-bridge/guardian.js
+# 同时启动 Web 面板（取消下面一行注释，或用独立 service）
+# ExecStartPost=/usr/bin/node /home/your_username/xiaozhi-mcp-bridge/server.js
+
+Restart=always
+RestartSec=5
+StartLimitInterval=0
+StartLimitBurst=0
+
+# 安全加固
+NoNewPrivileges=false
+PrivateTmp=false
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/your_username/xiaozhi-mcp-bridge
+
+# 日志
+StandardOutput=append:/home/your_username/xiaozhi-mcp-bridge/mcp.log
+StandardError=append:/home/your_username/xiaozhi-mcp-bridge/mcp.log
+
+[Install]
+WantedBy=multi-user.target

@@ -9,3 +9,4 @@ endpoints.json
 .DS_Store
 messages/
 mcp.json
+guardian-status.json

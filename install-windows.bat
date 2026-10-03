@@ -95,9 +95,13 @@ echo.
 set /p WSS_TOKEN="请输入小智 WSS Token (直接回车跳过): "
 
 if defined WSS_TOKEN (
-    REM 使用 PowerShell 替换 token（避免 bat 字符串转义问题）
-    powershell -NoProfile -Command "(Get-Content config.js) -replace 'wss://api\.xiaozhi\.me/mcp/\?token=YOUR_TOKEN_HERE', '%WSS_TOKEN%' | Set-Content config.js -Encoding UTF8"
-    echo [OK]    Token 已写入 config.js
+    REM 使用 node -e 安全写入（避免 PowerShell 特殊字符和占位符问题）
+    node -e "const fs=require('fs');const t=process.argv[1];let c=fs.readFileSync('config.js','utf8');c=c.replace(/xiaozhiWss:\s*'[^']*'/,'xiaozhiWss: \''+t.replace(/'/g,\"\\\\'\")+\"'\");fs.writeFileSync('config.js',c,'utf8');" "%WSS_TOKEN%"
+    if !errorlevel! equ 0 (
+        echo [OK]    Token 已写入 config.js
+    ) else (
+        echo [ERR]   Token 写入失败，请手动编辑 config.js
+    )
 ) else (
     echo [WARN]  跳过 Token 配置，请稍后手动编辑 config.js
 )

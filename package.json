@@ -1,6 +1,6 @@
 {
   "name": "xiaozhi-mcp-bridge",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "小智 AI MCP 桥接 - 多接入点管理/消息互发/工具自检/文件搜索天气系统命令代码执行，含Web管理面板 | Xiaozhi AI MCP Bridge with multi-endpoint, messaging, self-test and Web dashboard",
   "main": "server.js",
   "bin": {
@@ -59,13 +59,15 @@
     "lib/",
     "config.example.js",
     "start.sh",
+    "stop.sh",
+    "xiaozhi-mcp.service",
     "start-windows.bat",
     "start-windows-silent.vbs",
     "README.md",
     "LICENSE"
   ],
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "dependencies": {
     "@modelcontextprotocol/server-filesystem": "2026.8.31",
