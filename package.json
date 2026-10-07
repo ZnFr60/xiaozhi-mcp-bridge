@@ -1,6 +1,6 @@
 {
   "name": "xiaozhi-mcp-bridge",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "小智 AI MCP 桥接 - 多接入点管理/消息互发/工具自检/文件搜索天气系统命令代码执行，含Web管理面板 | Xiaozhi AI MCP Bridge with multi-endpoint, messaging, self-test and Web dashboard",
   "main": "server.js",
   "bin": {

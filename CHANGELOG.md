@@ -1,5 +1,25 @@
 # 更新日志 / Changelog
 
+## v1.1.5
+
+- **修复连接状态假阳性：断网时仍上报 `connected: true`。**
+  `guardian-multi.js` 原先用两个字符串判定"已连上小智"：
+  `成功连接到WebSocket服务器` 和 `Successfully connected to server`。
+  后者其实是 **mcp_exe 连上「本地 stdio 工具服务器」**时打印的
+  （`Successfully connected to server: node (message)`），**与对方服务器毫无关系** ——
+  于是只要本地工具装载完成，即使完全没有外网也会被判定为"已连接"。
+  实测在**没有默认路由的板子**上复现：日志在疯狂 `getaddrinfo EAI_AGAIN api.xiaozhi.me`
+  重连，面板却显示 `connected: 2/2`。
+
+  现在只认 WebSocket 专属标志 `成功连接到WebSocket服务器`，
+  并新增断开标志（`WebSocket连接已关闭` / `WebSocket错误`）在断线时把状态置回未连接。
+  同一次数据块里同时含成功与失败时，以**失败**为准。
+
+  > 影响面：v1.1.0–v1.1.4 的 `/api/status`、`runtime-state.json`、
+  > `guardian-status.json` 都可能虚报连接数。**v1.1.5 起状态可信。**
+
+---
+
 ## v1.1.4
 
 - **修复 `stop.sh` / `start.sh` 兜底清理会误杀用户终端的问题。**

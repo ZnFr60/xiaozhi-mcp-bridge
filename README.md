@@ -6,7 +6,7 @@
 > Let your Xiaozhi AI actually *use* this computer: read/write files, run commands,
 > check weather, search the web, write code — and let **two Xiaozhi agents message each other**.
 
-**当前版本 / Current version: v1.1.4** ｜ [更新日志 CHANGELOG](CHANGELOG.md)
+**当前版本 / Current version: v1.1.5** ｜ [更新日志 CHANGELOG](CHANGELOG.md)
 
 ---
 

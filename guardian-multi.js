@@ -33,8 +33,15 @@ const STATUS_FILE = path.join(APP_DIR, 'guardian-status.json');
 const PID_FILE = path.join(APP_DIR, 'guardian.pid');
 const LOGFILE = path.join(APP_DIR, 'mcp.log');
 
-// mcp_exe 连上 WebSocket 时打印的标志（中英文各一，兼容不同版本）
-const CONNECT_MARKERS = ['成功连接到WebSocket服务器', 'Successfully connected to server'];
+// 判定"是否真的连上了小智服务器"的输出标志。
+//
+// ⚠️ 只能用与 WebSocket 明确相关的字符串。
+// 曾误用 'Successfully connected to server' —— 那是 mcp_exe 连上【本地 stdio 工具服务器】
+// 时打印的（"Successfully connected to server: node (message)"），与对方服务器毫无关系。
+// 后果：设备断网时状态仍显示 connected=true（实测在无外网的板子上复现）。
+const CONNECT_MARKERS = ['成功连接到WebSocket服务器'];
+// 连接断开/失败的标志：出现即把状态置回未连接
+const DISCONNECT_MARKERS = ['WebSocket连接已关闭', 'WebSocket错误', 'WebSocket错误:'];
 
 const MIN_DELAY = 5000;
 const MAX_DELAY = 30000;
@@ -195,13 +202,20 @@ function spawnChild(ep, entry) {
   // 透传子进程输出到 mcp.log，同时从中识别"已连接"标志
   const onData = (d) => {
     try { fs.writeSync(logFd, d); } catch {}
-    if (!entry.connected) {
-      const text = d.toString();
-      if (CONNECT_MARKERS.some(m => text.includes(m))) {
-        entry.connected = true;
-        log(`[${entry.name}] 已连接`);
+    const text = d.toString();
+    // 断开优先判定：日志里同时含成功与失败时，以失败为准
+    if (DISCONNECT_MARKERS.some(m => text.includes(m))) {
+      if (entry.connected) {
+        entry.connected = false;
+        log(`[${entry.name}] 连接已断开`);
         writeRuntimeState();
       }
+      return;
+    }
+    if (!entry.connected && CONNECT_MARKERS.some(m => text.includes(m))) {
+      entry.connected = true;
+      log(`[${entry.name}] 已连接`);
+      writeRuntimeState();
     }
   };
   child.stdout.on('data', onData);
