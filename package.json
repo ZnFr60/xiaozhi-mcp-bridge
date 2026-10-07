@@ -1,6 +1,6 @@
 {
   "name": "xiaozhi-mcp-bridge",
-  "version": "1.0.8",
+  "version": "1.1.2",
   "description": "小智 AI MCP 桥接 - 多接入点管理/消息互发/工具自检/文件搜索天气系统命令代码执行，含Web管理面板 | Xiaozhi AI MCP Bridge with multi-endpoint, messaging, self-test and Web dashboard",
   "main": "server.js",
   "bin": {
@@ -10,8 +10,11 @@
   "scripts": {
     "start": "node bin/cli.js",
     "server": "node server.js",
-    "bridge": "node guardian.js",
+    "bridge": "node guardian-multi.js",
+    "bridge:single": "node guardian.js",
+    "migrate:messages": "node migrate-message-files.js",
     "test": "node test-harness.js",
+    "test:dual": "node test-dual-endpoint.js",
     "config": "node config-cli.js"
   },
   "keywords": [
@@ -44,6 +47,7 @@
     "bin/",
     "public/",
     "guardian.js",
+    "guardian-multi.js",
     "server.js",
     "web-tools.js",
     "weather-server.js",
@@ -51,8 +55,9 @@
     "dev-tools.js",
     "code-tools.js",
     "message-tools.js",
-    "message-tools.backup.js",
+    "migrate-message-files.js",
     "test-harness.js",
+    "test-dual-endpoint.js",
     "test-client.js",
     "config-cli.js",
     "mcp.template.json",
@@ -64,6 +69,7 @@
     "start-windows.bat",
     "start-windows-silent.vbs",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "engines": {

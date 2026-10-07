@@ -11,12 +11,12 @@ const express = require('express');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const http = require('http');
 
 const APP_DIR = __dirname;
 const ENDPOINTS_FILE = path.join(APP_DIR, 'endpoints.json');
+const RUNTIME_STATE_FILE = path.join(APP_DIR, 'runtime-state.json');
 const MCP_CONFIG = path.join(APP_DIR, 'mcp.json');
-const MCP_EXE = path.join(APP_DIR, 'node_modules', 'mcp_exe', 'bin', 'cli.js');
+const MCP_EXE = require('./lib/mcp-config.js').resolveDep(APP_DIR, 'mcp_exe', 'bin/cli.js');
 const PUBLIC_DIR = path.join(APP_DIR, 'public');
 const PORT = process.env.PORT || 37246;
 
@@ -33,10 +33,28 @@ function saveEndpoints(eps) {
 }
 
 // ---------- 进程管理 ----------
-const bridges = {}; // endpointId -> { child, logs, startedAt }
+const bridges = {}; // endpointId -> { child, logs, startedAt, stopping }
+
+/**
+ * 与 guardian-multi.js 的协作边界。
+ *
+ * guardian-multi.js 为每个接入点维持一条长连接，并写出 runtime-state.json。
+ * 若面板也对同一 token 去 spawn，就会产生重复连接，因此这里先查该状态再决定是否放行。
+ * （1.0.8 已用 guardian-status.json 做了单接入点守护的探测，此处补充多接入点场景。）
+ */
+function guardianState() {
+  try { return JSON.parse(fs.readFileSync(RUNTIME_STATE_FILE, 'utf8')); } catch { return null; }
+}
+function guardianManages(id) {
+  const st = guardianState();
+  return !!(st && Array.isArray(st.endpoints) && st.endpoints.some(e => e && e.id === id));
+}
 
 function startBridge(ep) {
-  if (bridges[ep.id]) return { ok: false, error: '已在运行' };
+  if (bridges[ep.id]) return { ok: false, error: bridges[ep.id].stopping ? '正在停止，请稍候' : '已在运行' };
+  if (guardianManages(ep.id)) {
+    return { ok: false, error: '该接入点正由 guardian-multi 守护进程管理，请勿在面板重复启动（会建立重复连接）。如需变更请用 config-cli.js。' };
+  }
   const child = spawn(process.execPath, [MCP_EXE, '--ws', ep.wss, '--mcp-config', MCP_CONFIG], {
     cwd: APP_DIR,
     stdio: ['ignore', 'pipe', 'pipe']
@@ -58,11 +76,17 @@ function startBridge(ep) {
 }
 
 function stopBridge(epId) {
+  if (guardianManages(epId)) {
+    return { ok: false, error: '该接入点由 guardian-multi 守护进程管理；如需下线请用 config-cli.js remove，守护进程会自动停止它。' };
+  }
   const entry = bridges[epId];
   if (!entry) return { ok: false, error: '未运行' };
+  if (entry.stopping) return { ok: false, error: '正在停止' };
+  // 标记"停止中"并保留表项，等 child 的 exit 回调再移除。
+  // 旧实现先 delete 再 kill：紧接着到达的 start 请求会起出第二个同 token 进程。
+  entry.stopping = true;
   try { entry.child.kill('SIGTERM'); } catch {}
   setTimeout(() => { try { entry.child.kill('SIGKILL'); } catch {} }, 2000);
-  delete bridges[epId];
   return { ok: true };
 }
 
@@ -179,18 +203,73 @@ const LOCAL_SERVERS = [
 
 // ---------- Express ----------
 const app = express();
+
+/**
+ * 访问控制。
+ *
+ * 本面板可以调用 code-tools.js（任意代码执行），而服务往往以 root 运行 ——
+ * 因此任何能访问该端口的人等于拿到 root shell。原实现监听 0.0.0.0 且没有任何
+ * 鉴权中间件，等于把 root 后门开在网络上。
+ *
+ * 默认只放行：本机回环 + Tailscale CGNAT 段 100.64.0.0/10。
+ * 需要额外网段时设置 PANEL_ALLOW_CIDRS（逗号分隔前缀，如 "192.168.1.,10.0.0."）。
+ * 需要口令时设置 PANEL_TOKEN，则要求 Authorization: Bearer <token> 或 ?token=<token>。
+ */
+const PANEL_TOKEN = String(process.env.PANEL_TOKEN || '');
+const PANEL_ALLOW_CIDRS = String(process.env.PANEL_ALLOW_CIDRS || '')
+  .split(',').map(s => s.trim()).filter(Boolean);
+
+function ipAllowed(ip) {
+  const raw = String(ip || '').replace(/^::ffff:/, '');
+  if (raw === '127.0.0.1' || raw === '::1') return true;
+  if (raw.startsWith('127.')) return true;
+  // Tailscale CGNAT: 100.64.0.0/10  =>  100.64.x.x .. 100.127.x.x
+  const m = /^(\d{1,3})\.(\d{1,3})\./.exec(raw);
+  if (m) {
+    const a = Number(m[1]), b = Number(m[2]);
+    if (a === 100 && b >= 64 && b <= 127) return true;
+  }
+  return PANEL_ALLOW_CIDRS.some(p => raw.startsWith(p));
+}
+
+app.use((req, res, next) => {
+  const ip = (req.socket && req.socket.remoteAddress) || '';
+  if (!ipAllowed(ip)) {
+    console.warn(`[panel] 拒绝访问 ${ip} ${req.method} ${req.originalUrl}`);
+    return res.status(403).json({ error: 'forbidden', hint: '仅允许本机与 Tailscale 网段；如需放行请设置 PANEL_ALLOW_CIDRS' });
+  }
+  if (PANEL_TOKEN) {
+    const auth = String(req.headers.authorization || '');
+    const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    const q = String(req.query.token || '');
+    if (bearer !== PANEL_TOKEN && q !== PANEL_TOKEN) {
+      return res.status(401).json({ error: 'unauthorized' });
+    }
+  }
+  next();
+});
+
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(PUBLIC_DIR));
 
 // 接入点列表
 app.get('/api/endpoints', (req, res) => {
   const eps = loadEndpoints();
-  const withStatus = eps.map(ep => ({
-    ...ep,
-    running: !!bridges[ep.id],
-    pid: bridges[ep.id]?.child?.pid || null,
-    uptime: bridges[ep.id] ? Math.floor((Date.now() - bridges[ep.id].startedAt) / 1000) : 0
-  }));
+  const gst = guardianState();
+  const geps = (gst && Array.isArray(gst.endpoints)) ? gst.endpoints : [];
+  const withStatus = eps.map(ep => {
+    const g = geps.find(e => e && e.id === ep.id) || null;
+    const local = bridges[ep.id] || null;
+    return {
+      ...ep,
+      // 面板自身 spawn 的，或由 guardian-multi 维护的，都算在跑
+      running: !!(local || (g && g.connected)),
+      managedByGuardian: !!g,
+      connected: g ? !!g.connected : !!local,
+      pid: (local && local.child && local.child.pid) || (g ? g.pid : null),
+      uptime: local ? Math.floor((Date.now() - local.startedAt) / 1000) : 0
+    };
+  });
   res.json(withStatus);
 });
 

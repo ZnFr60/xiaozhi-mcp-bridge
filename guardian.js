@@ -16,7 +16,7 @@ const os = require('os');
 
 const NODE = process.execPath;
 const APP_DIR = __dirname;
-const BRIDGE = path.join(APP_DIR, 'node_modules', 'mcp_exe', 'bin', 'cli.js');
+const BRIDGE = require('./lib/mcp-config.js').resolveDep(APP_DIR, 'mcp_exe', 'bin/cli.js');
 const CONFIG = path.join(APP_DIR, 'mcp.json');
 const LOGFILE = path.join(APP_DIR, 'mcp.log');
 const STATUS_FILE = path.join(APP_DIR, 'guardian-status.json');
@@ -303,6 +303,33 @@ setInterval(() => {
     try { child.kill('SIGTERM'); } catch {}
   }
 }, 60 * 1000);
+
+// ---------- 退出时收掉子进程 ----------
+// 被 kill 的进程其子进程只会被 init/systemd 收养而不会消失：
+// 若不显式停止，stop.sh 之后 mcp_exe 仍会占着 WebSocket 长连接，
+// 下次启动即变成同 token 的重复连接。
+let shuttingDown = false;
+function shutdown(sig) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  log(`收到 ${sig}，正在停止子进程…`);
+  try { child && child.kill('SIGTERM'); } catch {}
+  const t = setTimeout(() => {
+    try { child && child.kill('SIGKILL'); } catch {}
+    cleanupFiles();
+    process.exit(0);
+  }, 1500);
+  t.unref?.();
+  if (!child || child.exitCode !== null) { clearTimeout(t); cleanupFiles(); process.exit(0); }
+  child.once('exit', () => { clearTimeout(t); cleanupFiles(); process.exit(0); });
+}
+function cleanupFiles() {
+  try { fs.unlinkSync(STATUS_FILE); } catch {}
+  try { fs.unlinkSync(PID_FILE); } catch {}
+}
+for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
+  process.on(sig, () => shutdown(sig));
+}
 
 log(`guardian v5 started, pid=${process.pid}, node=${NODE}`);
 log(`token 校验通过: 用户=${jwtResult.info.userId}, 过期=${jwtResult.info.expiresAt}`);

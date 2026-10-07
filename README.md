@@ -90,11 +90,14 @@ chmod +x start.sh
 # 查看配置状态
 node config-cli.js status
 
-# 添加接入点（添加第2个后消息交换机自动启用）
-node config-cli.js add "我的小智" "wss://api.xiaozhi.me/mcp/?token=xxx"
+# 添加接入点（用户名称必填，详见下节）
+node config-cli.js add "我的小智" "wss://api.xiaozhi.me/mcp/?token=xxx" "小智1"
 
 # 列出所有接入点
 node config-cli.js list
+
+# 修改某个接入点的用户名称
+node config-cli.js user <接入点ID> "小智2"
 
 # 删除接入点
 node config-cli.js remove <接入点ID>
@@ -102,6 +105,44 @@ node config-cli.js remove <接入点ID>
 # 设置默认接入点 token（写入 config.js）
 node config-cli.js token "wss://api.xiaozhi.me/mcp/?token=xxx"
 ```
+
+### ⚠️ 用户名称（userName）—— 消息互发能否打通的关键
+
+每个接入点都必须配置一个**用户名称**，它是消息收发时双方互认的身份。
+**发送方填的 `to` 必须等于接收方的用户名称**，否则消息会被投递到另一个信箱，
+发送方看到「发送成功」而接收方永远收不到。
+
+```bash
+# 两台设备分别配置，用户名称各自唯一
+node config-cli.js add "小智A" "wss://.../mcp/?token=aaa" "小智A"
+node config-cli.js add "小智B" "wss://.../mcp/?token=bbb" "小智B"
+```
+
+配置完成后，`message-tools.js` 会把「你的身份是 X；可发送给：Y」直接写进工具描述，
+AI 无需自己猜、也不依赖它在上文里记住。`from` / `user` 即使填错或省略，
+系统也会按该接入点的真实身份自动填写；`to` 填错时若只有一个对端会自动纠正，
+否则返回可选名单。
+
+> v1.1.0 起 `userName` 为必填。从 v1.0.x 升级的老配置若缺少该字段，
+> 会退回使用 `name`，建议用 `config-cli.js user` 显式补齐。
+
+### 多接入点守护进程
+
+`guardian-multi.js` 以 `endpoints.json` 为唯一事实来源，为每个接入点各维持一条长连接：
+开机自启、退出后退避重连（5s→30s）、每 2 小时主动重启、每 60 秒重读配置
+（新增接入点自动上线、删除自动下线）。它还会为每个接入点生成独立的 `mcp-<id>.json`
+把身份注入消息工具，并写出 `runtime-state.json` 记录真实连接状态。
+
+`start.sh` 与 `bin/cli.js` 默认使用它；需要旧的单接入点模式时用 `npm run bridge:single`。
+
+### 🔒 面板访问控制
+
+面板可以调用 `code-tools.js`（任意代码执行），而服务往往以 root 运行 ——
+任何能访问该端口的人等于拿到 root shell。v1.1.0 起默认只放行本机回环与
+Tailscale CGNAT 段 `100.64.0.0/10`：
+
+- `PANEL_ALLOW_CIDRS` —— 额外放行的网段前缀（逗号分隔，如 `192.168.1.,10.0.0.`）
+- `PANEL_TOKEN` —— 设置后要求 `Authorization: Bearer <token>` 或 `?token=<token>`
 
 ### 工具列表
 
@@ -232,11 +273,14 @@ Manage endpoints from the command line (in addition to the Web dashboard):
 # View config status
 node config-cli.js status
 
-# Add endpoint (message exchange auto-enables with >=2 endpoints)
-node config-cli.js add "My Xiaozhi" "wss://api.xiaozhi.me/mcp/?token=xxx"
+# Add endpoint (userName is REQUIRED, see below)
+node config-cli.js add "My Xiaozhi" "wss://api.xiaozhi.me/mcp/?token=xxx" "xiaozhi1"
 
 # List all endpoints
 node config-cli.js list
+
+# Change an endpoint's user name
+node config-cli.js user <endpoint-id> "xiaozhi2"
 
 # Remove endpoint
 node config-cli.js remove <endpoint-id>
@@ -244,6 +288,41 @@ node config-cli.js remove <endpoint-id>
 # Set default endpoint token (writes to config.js)
 node config-cli.js token "wss://api.xiaozhi.me/mcp/?token=xxx"
 ```
+
+### ⚠️ userName — required for inter-agent messaging
+
+Every endpoint must have a **userName**. It is the identity the two agents recognise each
+other by: **the sender's `to` must equal the receiver's userName**, otherwise the message
+lands in a different mailbox — the sender sees "sent successfully" while the receiver
+never gets it.
+
+Once configured, `message-tools.js` writes "your identity is X; you can send to Y" straight
+into the tool description, so the model does not have to guess. `from` / `user` are filled
+in automatically from the endpoint's real identity, and a wrong `to` is auto-corrected when
+there is exactly one peer.
+
+> Since v1.1.0 `userName` is required. Legacy configs from v1.0.x fall back to `name`;
+> run `config-cli.js user` to set it explicitly.
+
+### Multi-endpoint guardian
+
+`guardian-multi.js` treats `endpoints.json` as the single source of truth and keeps one
+long-lived connection per endpoint: starts on boot, reconnects with backoff (5s→30s),
+restarts every 2 hours, re-reads the config every 60s (new endpoints come up automatically,
+removed ones shut down). It also generates a per-endpoint `mcp-<id>.json` that injects the
+identity into the message tools, and writes `runtime-state.json` with the real connection state.
+
+`start.sh` and `bin/cli.js` use it by default; `npm run bridge:single` keeps the old
+single-endpoint `guardian.js`.
+
+### 🔒 Dashboard access control
+
+The dashboard can invoke `code-tools.js` (arbitrary code execution) and the service often
+runs as root — so anyone who can reach the port effectively has a root shell.
+Since v1.1.0 it only accepts loopback and the Tailscale CGNAT range `100.64.0.0/10` by default.
+
+- `PANEL_ALLOW_CIDRS` — comma-separated prefixes to additionally allow (e.g. `192.168.1.,10.0.0.`)
+- `PANEL_TOKEN` — if set, requests must carry `Authorization: Bearer <token>` or `?token=<token>`
 
 ### Tool List
 

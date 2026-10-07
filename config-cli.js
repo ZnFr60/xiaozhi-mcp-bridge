@@ -2,9 +2,10 @@
 /**
  * 小智 MCP 桥接 - 命令行配置工具
  * Usage:
- *   node config-cli.js add <name> <wss>      添加接入点
+ *   node config-cli.js add <name> <wss> <userName>   添加接入点（用户名称必填）
  *   node config-cli.js list                   列出所有接入点
  *   node config-cli.js remove <id>            删除接入点
+ *   node config-cli.js user <id> <userName>   修改接入点的用户名称
  *   node config-cli.js token <wss>            设置默认接入点 token（写入 config.js）
  *   node config-cli.js status                 查看配置状态
  */
@@ -66,28 +67,48 @@ function writeToken(wss) {
 }
 
 // ---------- 命令 ----------
-function cmdAdd(name, wss) {
+function cmdAdd(name, wss, userName) {
   if (!name || !wss) {
-    err('用法: node config-cli.js add <名称> <WSS地址>');
+    err('用法: node config-cli.js add <名称> <WSS地址> <用户名称>');
     process.exit(1);
   }
+  // 用户名称必须显式给出：它是消息收发时双方互认的身份，
+  // 不配置就没法可靠地把消息投递到对端信箱（旧版就是因此收不到消息）。
+  if (!userName) {
+    err('缺少【用户名称】—— 必须为每个接入点指定它在消息收发中使用的身份名。');
+    console.log('');
+    console.log('  消息的 from / to / user 都以这个名称互认：');
+    console.log('  两个接入点的用户名称必须各自唯一，且发送方填的 to 要等于接收方的用户名称。');
+    console.log('');
+    console.log(`  示例: node config-cli.js add ${JSON.stringify(name)} "<WSS地址>" "小智1"`);
+    console.log('  如果这个接入点就是「小智1」那台设备，用户名称就填 "小智1"。');
+    process.exit(1);
+  }
+  const uname = String(userName).trim();
+  if (!uname) { err('用户名称不能为空。'); process.exit(1); }
+
   const eps = loadEndpoints();
   if (eps.some(e => e.name === name)) {
     err(`接入点名称 "${name}" 已存在`);
     process.exit(1);
   }
+  if (eps.some(e => String(e.userName || e.name) === uname)) {
+    warn(`已存在用户名称为 "${uname}" 的接入点，两者会共用同一个信箱，消息可能混淆。`);
+  }
   const ep = {
     id: 'ep_' + Date.now().toString(36),
     name: String(name),
+    userName: uname,
     wss: String(wss),
     createdAt: Date.now()
   };
   eps.push(ep);
   saveEndpoints(eps);
   ok(`已添加接入点: ${name}`);
-  console.log(`  ID:   ${ep.id}`);
-  console.log(`  WSS:  ${ep.wss.slice(0, 50)}...`);
-  console.log(`  总数: ${eps.length} 个`);
+  console.log(`  ID:       ${ep.id}`);
+  console.log(`  用户名称: ${ep.userName}`);
+  console.log(`  WSS:      ${ep.wss.slice(0, 50)}...`);
+  console.log(`  总数:     ${eps.length} 个`);
   if (eps.length >= 2) {
     ok('接入点 >= 2，消息交换机工具已自动启用');
   } else {
@@ -98,23 +119,54 @@ function cmdAdd(name, wss) {
 function cmdList() {
   const eps = loadEndpoints();
   if (!eps.length) {
-    warn('暂无接入点。使用 node config-cli.js add <名称> <WSS> 添加');
+    warn('暂无接入点。使用 node config-cli.js add <名称> <WSS地址> <用户名称> 添加');
     return;
   }
   console.log(`\n${C.bold}接入点列表（共 ${eps.length} 个）${C.reset}`);
   console.log('─'.repeat(70));
+  let missing = 0;
   for (const e of eps) {
     const date = new Date(e.createdAt).toLocaleString('zh-CN');
+    const un = e.userName ? e.userName : `${C.red}(未配置，将退回名称)${C.reset}`;
+    if (!e.userName) missing++;
     console.log(`  ${C.cyan}${e.id}${C.reset}  ${C.bold}${e.name}${C.reset}`);
+    console.log(`    用户名称: ${un}`);
     console.log(`    WSS: ${e.wss.slice(0, 60)}${e.wss.length > 60 ? '...' : ''}`);
     console.log(`    创建: ${date}`);
     console.log('');
+  }
+  if (missing) {
+    warn(`有 ${missing} 个接入点未配置用户名称，请用 config-cli.js user <ID> <用户名称> 补齐。`);
   }
   if (eps.length >= 2) {
     ok('消息交换机已启用（>=2 接入点）');
   } else {
     warn('消息交换机未启用（需 >=2 接入点）');
   }
+}
+
+function cmdUser(id, userName) {
+  if (!id || !userName) {
+    err('用法: node config-cli.js user <接入点ID> <用户名称>');
+    process.exit(1);
+  }
+  const eps = loadEndpoints();
+  const ep = eps.find(e => e.id === id);
+  if (!ep) {
+    err(`未找到接入点: ${id}`);
+    eps.forEach(e => console.log(`  ${e.id}  ${e.name}`));
+    process.exit(1);
+  }
+  const uname = String(userName).trim();
+  if (!uname) { err('用户名称不能为空。'); process.exit(1); }
+  if (eps.some(e => e.id !== id && String(e.userName || e.name) === uname)) {
+    warn(`已存在用户名称为 "${uname}" 的接入点，两者会共用同一个信箱。`);
+  }
+  const old = ep.userName || '(未配置)';
+  ep.userName = uname;
+  saveEndpoints(eps);
+  ok(`已更新用户名称: ${ep.name} (${id})`);
+  console.log(`  ${old} -> ${uname}`);
 }
 
 function cmdRemove(id) {
@@ -169,7 +221,7 @@ function cmdStatus() {
 
   console.log(`\n${C.cyan}多接入点 (endpoints.json):${C.reset}`);
   console.log(`  数量: ${eps.length}`);
-  eps.forEach(e => console.log(`    • ${e.name} (${e.id})`));
+  eps.forEach(e => console.log(`    • ${e.name} (${e.id})  用户名称: ${e.userName || '（未配置）'}`));
 
   console.log(`\n${C.cyan}消息交换机:${C.reset}`);
   if (eps.length >= 2) {
@@ -193,16 +245,24 @@ ${C.cyan}用法:${C.reset}
   node config-cli.js <命令> [参数]
 
 ${C.cyan}命令:${C.reset}
-  add <名称> <WSS>     添加一个小智接入点
-  list                 列出所有接入点
-  remove <ID>          删除指定接入点
-  token [WSS]          查看/设置默认接入点（写入 config.js）
-  status               查看配置状态
-  help                 显示此帮助
+  add <名称> <WSS地址> <用户名称>   添加一个小智接入点（用户名称必填）
+  list                             列出所有接入点
+  remove <ID>                      删除指定接入点
+  user <ID> <用户名称>             修改某个接入点的用户名称
+  token [WSS]                      查看/设置默认接入点（写入 config.js）
+  status                           查看配置状态
+  help                             显示此帮助
+
+${C.cyan}关于「用户名称」:${C.reset}
+  消息收发时双方以这个名字互认。发送方填的 to 必须等于接收方的用户名称，
+  否则消息会投递到另一个信箱，对方永远收不到。
+  每个接入点的用户名称应各自唯一。
 
 ${C.cyan}示例:${C.reset}
-  node config-cli.js add "我的小智" "wss://api.xiaozhi.me/mcp/?token=xxx"
+  node config-cli.js add "小智1" "wss://api.xiaozhi.me/mcp/?token=xxx" "小智1"
+  node config-cli.js add "小智2" "wss://api.xiaozhi.me/mcp/?token=yyy" "小智2"
   node config-cli.js list
+  node config-cli.js user ep_abc123 "新名字"
   node config-cli.js remove ep_abc123
   node config-cli.js token "wss://api.xiaozhi.me/mcp/?token=xxx"
   node config-cli.js status
@@ -214,10 +274,11 @@ const args = process.argv.slice(2);
 const cmd = args[0];
 
 switch (cmd) {
-  case 'add':    cmdAdd(args[1], args[2]); break;
+  case 'add':    cmdAdd(args[1], args[2], args[3]); break;
   case 'list':   cmdList(); break;
   case 'remove': cmdRemove(args[1]); break;
   case 'rm':     cmdRemove(args[1]); break;
+  case 'user':   cmdUser(args[1], args[2]); break;
   case 'token':  cmdToken(args[1]); break;
   case 'status': cmdStatus(); break;
   case 'help':

@@ -39,7 +39,7 @@ stop_by_pid() {
         pid=$(cat "$pidfile" 2>/dev/null)
         if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
             # 确认是我们的进程（命令行含对应脚本）
-            if ps -p "$pid" -o args= 2>/dev/null | grep -qE "(server\.js|guardian\.js)"; then
+            if ps -p "$pid" -o args= 2>/dev/null | grep -qE "(server\.js|guardian-multi\.js|guardian\.js)"; then
                 kill "$pid" 2>/dev/null
                 sleep 1
                 if kill -0 "$pid" 2>/dev/null; then
@@ -62,7 +62,7 @@ stop_by_pid "$GUARDIAN_PID_FILE" "桥接守护进程"
 stop_by_pid "$SERVER_PID_FILE" "Web 面板"
 
 # 兜底：如果还有残留的本项目 node 进程（通过 cwd 匹配），只杀匹配的
-for pid in $(pgrep -f "node.*(server\.js|guardian\.js)" 2>/dev/null); do
+for pid in $(pgrep -f "node.*(server\.js|guardian-multi\.js|guardian\.js)" 2>/dev/null); do
     if [ -d "/proc/$pid" ] && readlink -f "/proc/$pid/cwd" 2>/dev/null | grep -q "$APP_DIR"; then
         kill "$pid" 2>/dev/null
         echo "  清理残留进程 pid=$pid"
@@ -79,11 +79,11 @@ echo "  UI PID: $SERVER_PID"
 
 sleep 2
 
-# ---------- 启动桥接守护进程 ----------
-echo "[3/3] 启动桥接守护进程..."
-nohup node guardian.js >> "$LOG" 2>&1 &
+# ---------- 启动桥接守护进程（多接入点） ----------
+echo "[3/3] 启动桥接守护进程（多接入点）..."
+nohup node guardian-multi.js >> "$LOG" 2>&1 &
 GUARDIAN_PID=$!
-# guardian.js 自己会写 guardian.pid，这里兜底写一次
+# guardian-multi.js 会读 endpoints.json 并为每个接入点各起一条长连接；guardian.pid 由它自己写
 echo "$GUARDIAN_PID" > "$GUARDIAN_PID_FILE"
 echo "  桥接 PID: $GUARDIAN_PID"
 

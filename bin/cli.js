@@ -55,7 +55,7 @@ if (cmd === 'server') {
 
 // ---------- bridge 子命令：仅守护进程 ----------
 if (cmd === 'bridge') {
-  const guardian = spawn(process.execPath, [path.join(PROJECT_DIR, 'guardian.js')], {
+  const guardian = spawn(process.execPath, [path.join(PROJECT_DIR, 'guardian-multi.js')], {
     cwd: PROJECT_DIR, env: { ...process.env }, stdio: 'inherit'
   });
   process.on('SIGINT', () => { guardian.kill(); process.exit(0); });
@@ -91,7 +91,7 @@ setTimeout(() => {
   try {
     require(path.join(PROJECT_DIR, 'config.js'));
     console.log('[2/2] 启动桥接守护进程...');
-    const guardian = spawn(process.execPath, [path.join(PROJECT_DIR, 'guardian.js')], {
+    const guardian = spawn(process.execPath, [path.join(PROJECT_DIR, 'guardian-multi.js')], {
       cwd: PROJECT_DIR,
       env: { ...process.env },
       stdio: 'inherit'

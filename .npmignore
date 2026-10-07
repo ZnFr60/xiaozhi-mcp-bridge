@@ -15,3 +15,6 @@ install-linux.sh
 install-windows.bat
 mcp.json
 messages/
+runtime-state.json
+guardian-status.json
+mcp-*.json
